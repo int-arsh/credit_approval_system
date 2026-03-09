@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.db import connection
 from loans.models import Customer, Loan
 import pandas as pd
 from datetime import datetime
@@ -21,6 +22,9 @@ class Command(BaseCommand):
         
         # Import loans
         self.import_loans()
+        
+        # Reset PostgreSQL sequences
+        self.reset_sequences()
         
         self.stdout.write(self.style.SUCCESS('Data import completed successfully!'))
     
@@ -72,8 +76,9 @@ class Command(BaseCommand):
                     start_date = pd.to_datetime(row['Date of Approval']).date()
                     end_date = pd.to_datetime(row['End Date']).date()
                     
-                    # Create loan WITHOUT specifying loan_id (let it auto-increment)
+                    # Create loan with explicit loan_id
                     loan = Loan.objects.create(
+                        loan_id=int(row['Loan ID']),
                         customer=customer,
                         loan_amount=Decimal(str(row['Loan Amount'])),
                         tenure=int(row['Tenure']),
@@ -105,3 +110,27 @@ class Command(BaseCommand):
             self.stdout.write('Please place loan_data.xlsx in the project root directory')
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'Error importing loans: {str(e)}'))
+    
+    def reset_sequences(self):
+        """Reset PostgreSQL sequences after importing data with explicit IDs"""
+        self.stdout.write('Resetting database sequences...')
+        
+        try:
+            with connection.cursor() as cursor:
+                # Reset customer_id sequence
+                cursor.execute("""
+                    SELECT setval(pg_get_serial_sequence('customers', 'customer_id'), 
+                           COALESCE((SELECT MAX(customer_id) FROM customers), 1), 
+                           true);
+                """)
+                
+                # Reset loan_id sequence
+                cursor.execute("""
+                    SELECT setval(pg_get_serial_sequence('loans', 'loan_id'), 
+                           COALESCE((SELECT MAX(loan_id) FROM loans), 1), 
+                           true);
+                """)
+            
+            self.stdout.write(self.style.SUCCESS('✓ Database sequences reset'))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'Error resetting sequences: {str(e)}'))
