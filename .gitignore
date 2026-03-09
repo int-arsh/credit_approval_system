@@ -183,3 +183,15 @@ dmypy.json
 *.bak
 *.tmp
 *.temp
+
+
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+db.sqlite3
+*.log
+.env
+staticfiles/
+EOF
